@@ -220,27 +220,108 @@ export class AssetsComponent implements OnInit {
   //   });
   // }  
 
+  // exportToExcel() {
+  //   if (!this.assets.length) {
+  //     console.warn("Tidak ada data untuk diekspor!");
+  //     return;
+  //   }
+  
+  //   // **1️⃣ Cari jumlah maksimal PIC di seluruh asset**
+  //   const maxPicCount = Math.max(...this.assets.map(asset => asset.pic.length), 0);
+
+  //   const headerTemplate = [
+  //     ["AINO PAYMENT SOLUTION", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["DAFTAR ASET HARDWARE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["No. Dokumen", "AINO/CHC/F/17/10", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["Tanggal Terbit", "30-Sep-22", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["No. Revisi", "1.0", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["Halaman", "1 dari 1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+  //     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], // Baris kosong sebelum tabel
+  //   ];    
+  
+  //   // **2️⃣ Buat header Excel secara dinamis**
+  //   const headers = [
+  //     "No.",
+  //     "Kode Asset",
+  //     "Nama Barang",
+  //     "Serial Number",
+  //     "Spesifikasi",
+  //     "Tgl. Pengadaan",
+  //     ...Array.from({ length: maxPicCount }, (_, i) => `PIC ${i + 1}`), // ✅ Tambahkan header PIC 1, PIC 2, dst.
+  //     "PIC Terakhir",
+  //     "Status",
+  //     "Lokasi",
+  //     "Harga",
+  //     "Keterangan",
+  //     "Klasifikasi Sistem"
+  //   ];
+  
+  //   const exportData = this.assets.map((asset, index) => {
+  //     const rowData: any = {
+  //       "No.": index + 1,
+  //       "Kode Asset": asset.kode_asset,
+  //       "Nama Barang": asset.nama_asset,
+  //       "Serial Number": asset.serial_number,
+  //       "Spesifikasi": asset.spesifikasi,
+  //       "Tgl. Pengadaan": asset.tgl_pengadaan ? asset.tgl_pengadaan.split("T")[0] : "-",
+  //       // "PIC Terakhir": asset.pic.length ? asset.pic[asset.pic.length - 1].nama_pic : "Tidak ada PIC",
+  //       "Status": asset.status,
+  //       "Lokasi": asset.lokasi,
+  //       "Harga": asset.harga?.toString(),
+  //       "Keterangan": asset.deskripsi,
+  //       // "Keterangan": asset.pic.length 
+  //       // ? asset.pic.map(p => p.keterangan || "-").join(', ') 
+  //       // : "-",
+  //       "Klasifikasi Sistem": asset.klasifikasi
+  //     };
+
+  //     console.log("Data PIC:", asset.pic);
+  //     console.log("Keterangan hasil mapping:", asset.pic.map(p => p.keterangan || "-"));
+
+  
+  //     // **3️⃣ Tambahkan PIC secara dinamis**
+  //     asset.pic.forEach((pic, i) => {
+  //       rowData[`PIC ${i + 1}`] = pic.nama_pic;
+  //     });
+  
+  //     // **4️⃣ Pastikan semua baris memiliki jumlah kolom yang sama**
+  //     for (let i = asset.pic.length; i < maxPicCount; i++) {
+  //       rowData[`PIC ${i + 1}`] = "-";
+  //     }
+  
+  //     // **5️⃣ Tambahkan "PIC Terakhir"**
+  //     rowData["PIC Terakhir"] = asset.pic.length ? asset.pic[asset.pic.length - 1].nama_pic : "Tidak ada PIC";
+  
+  //     return rowData;
+  //   });
+  
+  //   console.log("Data yang akan diekspor:", exportData); // Debugging
+  
+  //   // **6️⃣ Konversi JSON ke Worksheet**
+  //   const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(exportData);
+  //   // const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet([
+  //   //   ...headerTemplate, // Header dokumen
+  //   //   headers,           // Header kolom
+  //   //   ...exportData.map(Object.values) // Data aset
+  //   // ]);
+  //   const wb: XLSX.WorkBook = XLSX.utils.book_new();
+  //   XLSX.utils.book_append_sheet(wb, ws, "Assets");
+  
+  //   // **7️⃣ Simpan sebagai file Excel**
+  //   XLSX.writeFile(wb, "Data_List_Assets.xlsx");
+  // }    
+
   exportToExcel() {
     if (!this.assets.length) {
       console.warn("Tidak ada data untuk diekspor!");
       return;
     }
   
-    // **1️⃣ Cari jumlah maksimal PIC di seluruh asset**
-    const maxPicCount = Math.max(...this.assets.map(asset => asset.pic.length), 0);
-
-    const headerTemplate = [
-      ["AINO PAYMENT SOLUTION", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["DAFTAR ASET HARDWARE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["No. Dokumen", "AINO/CHC/F/17/10", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["Tanggal Terbit", "30-Sep-22", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["No. Revisi", "1.0", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["Halaman", "1 dari 1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], // Baris kosong sebelum tabel
-    ];    
+    // **1️⃣ Cari jumlah maksimal PIC di seluruh aset**
+    const maxPicCount = Math.max(...this.assets.map(asset => asset.pic?.length || 0), 0);
   
-    // **2️⃣ Buat header Excel secara dinamis**
+    // **2️⃣ Buat header Excel dengan urutan yang benar**
     const headers = [
       "No.",
       "Kode Asset",
@@ -248,8 +329,8 @@ export class AssetsComponent implements OnInit {
       "Serial Number",
       "Spesifikasi",
       "Tgl. Pengadaan",
-      ...Array.from({ length: maxPicCount }, (_, i) => `PIC ${i + 1}`), // ✅ Tambahkan header PIC 1, PIC 2, dst.
-      "PIC Terakhir",
+      ...Array.from({ length: maxPicCount }, (_, i) => `PIC ${i + 1}`), // ✅ PIC 1, PIC 2, ...
+      "PIC Terakhir", // ✅ PIC terakhir setelah PIC history
       "Status",
       "Lokasi",
       "Harga",
@@ -260,56 +341,46 @@ export class AssetsComponent implements OnInit {
     const exportData = this.assets.map((asset, index) => {
       const rowData: any = {
         "No.": index + 1,
-        "Kode Asset": asset.kode_asset,
-        "Nama Barang": asset.nama_asset,
-        "Serial Number": asset.serial_number,
-        "Spesifikasi": asset.spesifikasi,
-        "Tgl. Pengadaan": asset.tgl_pengadaan ? asset.tgl_pengadaan.split("T")[0] : "-",
-        "Status": asset.status,
-        "Lokasi": asset.lokasi,
-        "Harga": asset.harga?.toString(),
-        "Keterangan": asset.deskripsi,
-        // "Keterangan": asset.pic.length 
-        // ? asset.pic.map(p => p.keterangan || "-").join(', ') 
-        // : "-",
-        "Klasifikasi Sistem": asset.klasifikasi
+        "Kode Asset": asset.kode_asset || "-",
+        "Nama Barang": asset.nama_asset || "-",
+        "Serial Number": asset.serial_number || "-",
+        "Spesifikasi": asset.spesifikasi || "-",
+        "Tgl. Pengadaan": asset.tgl_pengadaan ? asset.tgl_pengadaan.split("T")[0] : "-"
       };
-
-      console.log("Data PIC:", asset.pic);
-      console.log("Keterangan hasil mapping:", asset.pic.map(p => p.keterangan || "-"));
-
   
-      // **3️⃣ Tambahkan PIC secara dinamis**
-      asset.pic.forEach((pic, i) => {
-        rowData[`PIC ${i + 1}`] = pic.nama_pic;
+      // **3️⃣ Tambahkan PIC secara dinamis sesuai jumlah maksimal PIC**
+      asset.pic?.forEach((pic, i) => {
+        rowData[`PIC ${i + 1}`] = pic.nama_pic || "-";
       });
   
       // **4️⃣ Pastikan semua baris memiliki jumlah kolom yang sama**
-      for (let i = asset.pic.length; i < maxPicCount; i++) {
+      for (let i = asset.pic?.length || 0; i < maxPicCount; i++) {
         rowData[`PIC ${i + 1}`] = "-";
       }
   
-      // **5️⃣ Tambahkan "PIC Terakhir"**
-      rowData["PIC Terakhir"] = asset.pic.length ? asset.pic[asset.pic.length - 1].nama_pic : "Tidak ada PIC";
+      // **5️⃣ Tambahkan "PIC Terakhir" setelah daftar PIC**
+      rowData["PIC Terakhir"] = asset.pic?.length ? asset.pic[asset.pic.length - 1].nama_pic || "-" : "Tidak ada PIC";
+  
+      // **6️⃣ Tambahkan data lainnya setelah PIC Terakhir**
+      rowData["Status"] = asset.status || "-";
+      rowData["Lokasi"] = asset.lokasi || "-";
+      rowData["Harga"] = asset.harga?.toString() || "-";
+      rowData["Keterangan"] = asset.deskripsi || "-";
+      rowData["Klasifikasi Sistem"] = asset.klasifikasi || "-";
   
       return rowData;
     });
   
     console.log("Data yang akan diekspor:", exportData); // Debugging
   
-    // **6️⃣ Konversi JSON ke Worksheet**
-    // const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(exportData);
-    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet([
-      ...headerTemplate, // Header dokumen
-      headers,           // Header kolom
-      ...exportData.map(Object.values) // Data aset
-    ]);
+    // **7️⃣ Konversi JSON ke Worksheet dengan header yang benar**
+    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(exportData, { header: headers });
     const wb: XLSX.WorkBook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Assets");
   
-    // **7️⃣ Simpan sebagai file Excel**
+    // **8️⃣ Simpan sebagai file Excel**
     XLSX.writeFile(wb, "Data_List_Assets.xlsx");
-  }    
+  }  
   
   getAllPicNames(asset: Assets): string {
     return asset.pic?.map(pic => pic.nama_pic).join(', ') || '-';

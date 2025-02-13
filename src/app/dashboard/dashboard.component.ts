@@ -8,22 +8,23 @@ import { CommonModule } from '@angular/common';
 
 @Component({
   standalone: true,
-    selector: 'app-dashboard',
-    imports: [RouterLink, CommonModule],
-    templateUrl: './dashboard.component.html',
-    styleUrl: './dashboard.component.css'
+  selector: 'app-dashboard',
+  imports: [RouterLink, CommonModule],
+  templateUrl: './dashboard.component.html',
+  styleUrl: './dashboard.component.css',
 })
 export class DashboardComponent implements OnInit {
-  
   constructor(
     private router: Router,
     private cookieService: CookieService,
-    // private tourGuideService: TourGuideService, 
+    // private tourGuideService: TourGuideService,
     @Inject('apiUrl') private apiUrl: string
   ) {}
 
   user: any = {};
+  role_code: any;
   // private tour: any;
+  timelineHistory: any[] = [];
 
   // user
   dataDALength: any;
@@ -48,7 +49,8 @@ export class DashboardComponent implements OnInit {
   p: any;
 
   ngOnInit(): void {
-    
+    this.fetchProfileData();
+    console.log('Role Code di ngOnInit:', this.role_code);
     this.fetchDataFormDA();
     this.fetchDataFormITCM();
     this.fetchAllDataBA();
@@ -75,12 +77,66 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
-        console.log('tour, ', response.data.tour);
+        console.log('Profile data:', response.data);
+
+        if (response.data && response.data.role_code) {
+          this.user = { role: response.data.role_code }; // Gunakan role_code
+          this.role_code = response.data.role_code; // Tambahkan ini
+          console.log('User:', this.user);
+          console.log('User role:', this.user.role);
+
+          // Cek role sebelum fetch timeline
+          if (this.user.role === 'SA' || this.user.role === 'A') {
+            this.fetchTimelineHistory();
+          } else {
+            console.warn(
+              'Role bukan SA atau A, fetchTimelineHistory tidak dijalankan.'
+            );
+          }
+        } else {
+          console.error('Role tidak ditemukan dalam response');
+        }
       })
       .catch((error) => {
-        if (error.response && error.response.status === 500) {
-          console.log(error.response.data.message);
+        console.error('Error fetching profile data:', error);
+      });
+  }
+
+  fetchTimelineHistory() {
+    if (!this.user || !this.user.role) {
+      console.log('fetching tidak jalan');
+      console.error('User atau role tidak terdefinisi');
+      return;
+    }
+
+    const endpoint =
+      this.user.role === 'SA'
+        ? `${environment.apiUrl2}/superadmin/timeline/history`
+        : `${environment.apiUrl2}/admin/timeline/history`;
+
+    axios
+      .get(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+        },
+      })
+      .then((response) => {
+        console.log('Timeline history response:', response.data); // 🔍 Cek isi response
+        if (Array.isArray(response.data)) {
+          this.timelineHistory = response.data;
+        } else if (response.data && Array.isArray(response.data.data)) {
+          this.timelineHistory = response.data.data; // Kalau API pakai wrapper object
+        } else {
+          console.warn(
+            'Response tidak sesuai format yang diharapkan:',
+            response.data
+          );
+          this.timelineHistory = [];
         }
+        console.log('Timeline history di frontend:', this.timelineHistory);
+      })
+      .catch((error) => {
+        console.error('Error fetching timeline history:', error);
       });
   }
 
