@@ -24,7 +24,9 @@ export class DashboardComponent implements OnInit {
   user: any = {};
   role_code: any;
   // private tour: any;
-  timelineHistory: any[] = [];
+  recentTimelineHistory: any[] = [];
+  olderTimelineHistory: any[] = [];
+  allOlderTimelineHistory: any[] = [];
 
   // user
   dataDALength: any;
@@ -51,6 +53,10 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     this.fetchProfileData();
     console.log('Role Code di ngOnInit:', this.role_code);
+    // Auto refresh setiap 3 menit
+    setInterval(() => {
+      this.fetchProfileData();
+    }, 180000);
     this.fetchDataFormDA();
     this.fetchDataFormITCM();
     this.fetchAllDataBA();
@@ -87,7 +93,8 @@ export class DashboardComponent implements OnInit {
 
           // Cek role sebelum fetch timeline
           if (this.user.role === 'SA' || this.user.role === 'A') {
-            this.fetchTimelineHistory();
+            this.fetchRecentTimeline();
+            this.fetchOlderTimeline();
           } else {
             console.warn(
               'Role bukan SA atau A, fetchTimelineHistory tidak dijalankan.'
@@ -102,17 +109,17 @@ export class DashboardComponent implements OnInit {
       });
   }
 
-  fetchTimelineHistory() {
+  fetchRecentTimeline() {
     if (!this.user || !this.user.role) {
-      console.log('fetching tidak jalan');
+      console.log('fetching recent tidak jalan');
       console.error('User atau role tidak terdefinisi');
       return;
     }
 
     const endpoint =
       this.user.role === 'SA'
-        ? `${environment.apiUrl2}/superadmin/timeline/history`
-        : `${environment.apiUrl2}/admin/timeline/history`;
+        ? `${environment.apiUrl2}/superadmin/timeline/recent`
+        : `${environment.apiUrl2}/admin/timeline/recent`;
 
     axios
       .get(endpoint, {
@@ -121,23 +128,77 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
-        console.log('Timeline history response:', response.data); // 🔍 Cek isi response
+        console.log('Recent:', response.data); // 🔍 Cek isi response
         if (Array.isArray(response.data)) {
-          this.timelineHistory = response.data;
+          this.recentTimelineHistory = response.data;
         } else if (response.data && Array.isArray(response.data.data)) {
-          this.timelineHistory = response.data.data; // Kalau API pakai wrapper object
+          this.recentTimelineHistory = response.data.data; // Kalau API pakai wrapper object
         } else {
           console.warn(
             'Response tidak sesuai format yang diharapkan:',
             response.data
           );
-          this.timelineHistory = [];
+          this.recentTimelineHistory = [];
         }
-        console.log('Timeline history di frontend:', this.timelineHistory);
       })
       .catch((error) => {
         console.error('Error fetching timeline history:', error);
       });
+  }
+
+  fetchOlderTimeline() {
+    if (!this.user || !this.user.role) {
+      console.log('fetching older tidak jalan');
+      console.error('User atau role tidak terdefinisi');
+      return;
+    }
+
+    const endpoint =
+      this.user.role === 'SA'
+        ? `${environment.apiUrl2}/superadmin/timeline/older`
+        : `${environment.apiUrl2}/admin/timeline/older`;
+
+    axios
+      .get(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+        },
+      })
+      .then((response) => {
+        console.log('Older:', response.data); // Cek isi response
+        if (Array.isArray(response.data)) {
+          // Simpan semua data ke variabel
+          this.allOlderTimelineHistory = response.data;
+          // this.olderTimelineHistory = response.data;
+
+          // Tampilkan hanya 3 data pertama
+        this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+        } else if (response.data && Array.isArray(response.data.data)) {
+          // this.olderTimelineHistory = response.data.data; // Kalau API pakai wrapper object
+          this.allOlderTimelineHistory = response.data.data;
+          this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+        } else {
+          console.warn(
+            'Response tidak sesuai format yang diharapkan:',
+            response.data
+          );
+          this.olderTimelineHistory = [];
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching timeline history:', error);
+      });
+  }
+
+  refreshTimeline() {
+    this.fetchRecentTimeline();
+    this.fetchOlderTimeline();
+  }
+
+  loadMore() {
+    const currentLength = this.olderTimelineHistory.length;
+    const nextData = this.allOlderTimelineHistory.slice(currentLength, currentLength + 3);
+    this.olderTimelineHistory = [...this.olderTimelineHistory, ...nextData];
   }
 
   fetchDataFormDA(): void {
