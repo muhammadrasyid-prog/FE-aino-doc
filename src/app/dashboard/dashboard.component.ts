@@ -27,6 +27,11 @@ export class DashboardComponent implements OnInit {
   recentTimelineHistory: any[] = [];
   olderTimelineHistory: any[] = [];
   allOlderTimelineHistory: any[] = [];
+  olderTimelineOffset: number = 0; // Offset untuk paginasi
+  hasMoreData: boolean = true;
+
+  isLoading: boolean = false;
+  noMoreDataMessage: string | null = null;
 
   // user
   dataDALength: any;
@@ -55,7 +60,10 @@ export class DashboardComponent implements OnInit {
     console.log('Role Code di ngOnInit:', this.role_code);
     // Auto refresh setiap 3 menit
     setInterval(() => {
-      this.fetchProfileData();
+      if (this.role_code === 'SA' || this.role_code === 'A') {
+        this.fetchRecentTimeline();
+        this.fetchOlderTimeline();
+      }
     }, 180000);
     this.fetchDataFormDA();
     this.fetchDataFormITCM();
@@ -111,8 +119,6 @@ export class DashboardComponent implements OnInit {
 
   fetchRecentTimeline() {
     if (!this.user || !this.user.role) {
-      console.log('fetching recent tidak jalan');
-      console.error('User atau role tidak terdefinisi');
       return;
     }
 
@@ -128,16 +134,11 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
-        console.log('Recent:', response.data); // 🔍 Cek isi response
         if (Array.isArray(response.data)) {
           this.recentTimelineHistory = response.data;
         } else if (response.data && Array.isArray(response.data.data)) {
           this.recentTimelineHistory = response.data.data; // Kalau API pakai wrapper object
         } else {
-          console.warn(
-            'Response tidak sesuai format yang diharapkan:',
-            response.data
-          );
           this.recentTimelineHistory = [];
         }
       })
@@ -146,10 +147,52 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  // fetchOlderTimeline() {
+  //   if (!this.user || !this.user.role) {
+  //     console.log('fetching older tidak jalan');
+  //     console.error('User atau role tidak terdefinisi');
+  //     return;
+  //   }
+
+  //   const endpoint =
+  //     this.user.role === 'SA'
+  //       ? `${environment.apiUrl2}/superadmin/timeline/older`
+  //       : `${environment.apiUrl2}/admin/timeline/older`;
+
+  //   axios
+  //     .get(endpoint, {
+  //       headers: {
+  //         Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+  //       },
+  //     })
+  //     .then((response) => {
+  //       console.log('Older:', response.data); // Cek isi response
+  //       if (Array.isArray(response.data)) {
+  //         // Simpan semua data ke variabel
+  //         this.allOlderTimelineHistory = response.data;
+  //         // this.olderTimelineHistory = response.data;
+
+  //         // Tampilkan hanya 3 data pertama
+  //       this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+  //       } else if (response.data && Array.isArray(response.data.data)) {
+  //         // this.olderTimelineHistory = response.data.data; // Kalau API pakai wrapper object
+  //         this.allOlderTimelineHistory = response.data.data;
+  //         this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+  //       } else {
+  //         console.warn(
+  //           'Response tidak sesuai format yang diharapkan:',
+  //           response.data
+  //         );
+  //         this.olderTimelineHistory = [];
+  //       }
+  //     })
+  //     .catch((error) => {
+  //       console.error('Error fetching timeline history:', error);
+  //     });
+  // }
+
   fetchOlderTimeline() {
     if (!this.user || !this.user.role) {
-      console.log('fetching older tidak jalan');
-      console.error('User atau role tidak terdefinisi');
       return;
     }
 
@@ -163,25 +206,43 @@ export class DashboardComponent implements OnInit {
         headers: {
           Authorization: `Bearer ${this.cookieService.get('userToken')}`,
         },
+        params: {
+          limit: 3, // Ambil 3 data per request
+          offset: this.olderTimelineOffset, // Offset untuk paginasi
+        },
       })
       .then((response) => {
-        console.log('Older:', response.data); // Cek isi response
-        if (Array.isArray(response.data)) {
-          // Simpan semua data ke variabel
-          this.allOlderTimelineHistory = response.data;
-          // this.olderTimelineHistory = response.data;
 
-          // Tampilkan hanya 3 data pertama
-        this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+        // Jika backend mengembalikan pesan "no other data"
+        if (response.data.message === 'no other data') {
+          this.hasMoreData = false; // Nonaktifkan tombol "Load More"
+          this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat'; // Tampilkan pesan
+          return;
+        }
+
+        if (Array.isArray(response.data)) {
+          // Tambahkan data baru ke olderTimelineHistory
+          this.olderTimelineHistory = [
+            ...this.olderTimelineHistory,
+            ...response.data,
+          ];
+          // Update offset untuk request berikutnya
+          this.olderTimelineOffset += 3;
+          // Jika data yang diterima kurang dari 3, artinya tidak ada data lagi
+          if (response.data.length < 3) {
+            this.hasMoreData = false;
+          }
         } else if (response.data && Array.isArray(response.data.data)) {
-          // this.olderTimelineHistory = response.data.data; // Kalau API pakai wrapper object
-          this.allOlderTimelineHistory = response.data.data;
-          this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
+          // Jika API menggunakan wrapper object
+          this.olderTimelineHistory = [
+            ...this.olderTimelineHistory,
+            ...response.data.data,
+          ];
+          this.olderTimelineOffset += 3;
+          if (response.data.data.length < 3) {
+            this.hasMoreData = false;
+          }
         } else {
-          console.warn(
-            'Response tidak sesuai format yang diharapkan:',
-            response.data
-          );
           this.olderTimelineHistory = [];
         }
       })
@@ -190,16 +251,35 @@ export class DashboardComponent implements OnInit {
       });
   }
 
-  refreshTimeline() {
-    this.fetchRecentTimeline();
+  loadMore() {
+    // Fetch data baru dari backend
     this.fetchOlderTimeline();
   }
 
-  loadMore() {
-    const currentLength = this.olderTimelineHistory.length;
-    const nextData = this.allOlderTimelineHistory.slice(currentLength, currentLength + 3);
-    this.olderTimelineHistory = [...this.olderTimelineHistory, ...nextData];
+  refreshTimeline() {
+    this.isLoading = true;
+    console.log('Loading state:', this.isLoading); // Log state loading
+
+    Promise.all([this.fetchRecentTimeline(), this.fetchOlderTimeline()])
+      .then(() => {
+      })
+      .catch((error) => {
+        console.error('Error refreshing timeline:', error);
+      })
+      .finally(() => {
+        this.isLoading = false;
+        console.log('Loading finished, state:', this.isLoading); // Log ketika loading selesai
+      });
   }
+
+  // loadMore() {
+  //   const currentLength = this.olderTimelineHistory.length;
+  //   const nextData = this.allOlderTimelineHistory.slice(
+  //     currentLength,
+  //     currentLength + 3
+  //   );
+  //   this.olderTimelineHistory = [...this.olderTimelineHistory, ...nextData];
+  // }
 
   fetchDataFormDA(): void {
     axios
