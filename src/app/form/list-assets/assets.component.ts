@@ -22,7 +22,7 @@ import Swal from 'sweetalert2';
 import { ExportAsService, ExportAsConfig } from 'ngx-export-as';
 import { ExportAsModule } from 'ngx-export-as';
 import { AvatarModule, AvatarSource } from 'ngx-avatars';
-import { HttpClientModule } from '@angular/common/http';
+// import { HttpClientModule } from '@angular/common/http';
 import * as XLSX from 'xlsx';
 
 interface Signatory {
@@ -58,7 +58,7 @@ interface Pic {
 @Component({
   standalone: true,
     selector: 'app-assets',
-    imports: [CommonModule, FormsModule, ReactiveFormsModule, ExportAsModule, HttpClientModule, AvatarModule],
+    imports: [CommonModule, FormsModule, ReactiveFormsModule, ExportAsModule, AvatarModule],
     templateUrl: './assets.component.html',
     styleUrl: './assets.component.css'
 })

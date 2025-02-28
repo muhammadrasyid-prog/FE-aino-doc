@@ -5,11 +5,14 @@ import { CookieService } from 'ngx-cookie-service';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 // import { TourGuideService } from '../services/shepherd/shepherd.service';
+import { NgxEchartsModule } from 'ngx-echarts';
+import { EChartsOption } from 'echarts';
+import { ChangeDetectorRef } from '@angular/core';
 
 @Component({
   standalone: true,
   selector: 'app-dashboard',
-  imports: [RouterLink, CommonModule],
+  imports: [RouterLink, CommonModule, NgxEchartsModule],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.css',
 })
@@ -17,6 +20,7 @@ export class DashboardComponent implements OnInit {
   constructor(
     private router: Router,
     private cookieService: CookieService,
+    private cdr: ChangeDetectorRef,
     // private tourGuideService: TourGuideService,
     @Inject('apiUrl') private apiUrl: string
   ) {}
@@ -26,12 +30,21 @@ export class DashboardComponent implements OnInit {
   // private tour: any;
   recentTimelineHistory: any[] = [];
   olderTimelineHistory: any[] = [];
-  allOlderTimelineHistory: any[] = [];
+  // allOlderTimelineHistory: any[] = [];
   olderTimelineOffset: number = 0; // Offset untuk paginasi
+  superadminOlderTimelineHistory: any[] = [];
+  adminOlderTimelineHistory: any[] = [];
   hasMoreData: boolean = true;
 
   isLoading: boolean = false;
   noMoreDataMessage: string | null = null;
+
+  //charts
+  // chartOptions: EChartsOption = {};
+  lineChartOptions: any;
+  pieChartOptions: any;
+  documentCounts: { month: string; count: number }[] = [];
+  documentStatusCounts: { status: string; count: number }[] = [];
 
   // user
   dataDALength: any;
@@ -65,6 +78,8 @@ export class DashboardComponent implements OnInit {
         this.fetchOlderTimeline();
       }
     }, 180000);
+    this.fetchDocumentCounts();
+    this.fetchDocumentStatusCounts();
     this.fetchDataFormDA();
     this.fetchDataFormITCM();
     this.fetchAllDataBA();
@@ -103,6 +118,8 @@ export class DashboardComponent implements OnInit {
           if (this.user.role === 'SA' || this.user.role === 'A') {
             this.fetchRecentTimeline();
             this.fetchOlderTimeline();
+            this.fetchDocumentCounts();
+            this.fetchDocumentStatusCounts();
           } else {
             console.warn(
               'Role bukan SA atau A, fetchTimelineHistory tidak dijalankan.'
@@ -147,59 +164,15 @@ export class DashboardComponent implements OnInit {
       });
   }
 
-  // fetchOlderTimeline() {
-  //   if (!this.user || !this.user.role) {
-  //     console.log('fetching older tidak jalan');
-  //     console.error('User atau role tidak terdefinisi');
-  //     return;
-  //   }
-
-  //   const endpoint =
-  //     this.user.role === 'SA'
-  //       ? `${environment.apiUrl2}/superadmin/timeline/older`
-  //       : `${environment.apiUrl2}/admin/timeline/older`;
-
-  //   axios
-  //     .get(endpoint, {
-  //       headers: {
-  //         Authorization: `Bearer ${this.cookieService.get('userToken')}`,
-  //       },
-  //     })
-  //     .then((response) => {
-  //       console.log('Older:', response.data); // Cek isi response
-  //       if (Array.isArray(response.data)) {
-  //         // Simpan semua data ke variabel
-  //         this.allOlderTimelineHistory = response.data;
-  //         // this.olderTimelineHistory = response.data;
-
-  //         // Tampilkan hanya 3 data pertama
-  //       this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
-  //       } else if (response.data && Array.isArray(response.data.data)) {
-  //         // this.olderTimelineHistory = response.data.data; // Kalau API pakai wrapper object
-  //         this.allOlderTimelineHistory = response.data.data;
-  //         this.olderTimelineHistory = this.allOlderTimelineHistory.slice(0, 3);
-  //       } else {
-  //         console.warn(
-  //           'Response tidak sesuai format yang diharapkan:',
-  //           response.data
-  //         );
-  //         this.olderTimelineHistory = [];
-  //       }
-  //     })
-  //     .catch((error) => {
-  //       console.error('Error fetching timeline history:', error);
-  //     });
-  // }
-
   fetchOlderTimeline() {
     if (!this.user || !this.user.role) {
       return;
     }
 
-    const endpoint =
-      this.user.role === 'SA'
-        ? `${environment.apiUrl2}/superadmin/timeline/older`
-        : `${environment.apiUrl2}/admin/timeline/older`;
+    const isSuperAdmin = this.user.role === 'SA';
+    const endpoint = isSuperAdmin
+      ? `${environment.apiUrl2}/superadmin/timeline/older`
+      : `${environment.apiUrl2}/admin/timeline/older`;
 
     axios
       .get(endpoint, {
@@ -207,53 +180,67 @@ export class DashboardComponent implements OnInit {
           Authorization: `Bearer ${this.cookieService.get('userToken')}`,
         },
         params: {
-          limit: 3, // Ambil 3 data per request
-          offset: this.olderTimelineOffset, // Offset untuk paginasi
+          limit: 3,
+          offset: isSuperAdmin ? this.superadminOlderTimelineHistory.length : this.adminOlderTimelineHistory.length,
         },
       })
       .then((response) => {
-
-        // Jika backend mengembalikan pesan "no other data"
         if (response.data.message === 'no other data') {
-          this.hasMoreData = false; // Nonaktifkan tombol "Load More"
-          this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat'; // Tampilkan pesan
+          this.hasMoreData = false;
+          this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat';
+          this.cdr.detectChanges();
           return;
         }
 
+        let newData = [];
+
         if (Array.isArray(response.data)) {
-          // Tambahkan data baru ke olderTimelineHistory
-          this.olderTimelineHistory = [
-            ...this.olderTimelineHistory,
-            ...response.data,
-          ];
-          // Update offset untuk request berikutnya
-          this.olderTimelineOffset += 3;
-          // Jika data yang diterima kurang dari 3, artinya tidak ada data lagi
-          if (response.data.length < 3) {
-            this.hasMoreData = false;
+          newData = response.data;
+        } else if (
+          response.data?.data?.result &&
+          Array.isArray(response.data.data.result)
+        ) {
+          newData = response.data.data.result;
+        }
+
+        if (newData.length > 0) {
+          if (isSuperAdmin) {
+            this.superadminOlderTimelineHistory = [
+              ...this.superadminOlderTimelineHistory,
+              ...newData,
+            ];
+          } else {
+            this.adminOlderTimelineHistory = [
+              ...this.adminOlderTimelineHistory,
+              ...newData,
+            ];
           }
-        } else if (response.data && Array.isArray(response.data.data)) {
-          // Jika API menggunakan wrapper object
-          this.olderTimelineHistory = [
-            ...this.olderTimelineHistory,
-            ...response.data.data,
-          ];
-          this.olderTimelineOffset += 3;
-          if (response.data.data.length < 3) {
+
+          isSuperAdmin ? this.superadminOlderTimelineHistory.length : this.adminOlderTimelineHistory.length += 3;
+
+          if (newData.length < 3) {
             this.hasMoreData = false;
           }
         } else {
-          this.olderTimelineHistory = [];
+          this.hasMoreData = false;
+          this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat';
         }
+
+        this.cdr.detectChanges();
       })
       .catch((error) => {
         console.error('Error fetching timeline history:', error);
       });
   }
 
+  getOlderTimelineHistory(): any[] {
+    return this.role_code === 'SA' ? this.superadminOlderTimelineHistory : this.olderTimelineHistory;
+  }  
+
   loadMore() {
-    // Fetch data baru dari backend
-    this.fetchOlderTimeline();
+    if (this.hasMoreData) {
+      this.fetchOlderTimeline();
+    }
   }
 
   refreshTimeline() {
@@ -261,8 +248,7 @@ export class DashboardComponent implements OnInit {
     console.log('Loading state:', this.isLoading); // Log state loading
 
     Promise.all([this.fetchRecentTimeline(), this.fetchOlderTimeline()])
-      .then(() => {
-      })
+      .then(() => {})
       .catch((error) => {
         console.error('Error refreshing timeline:', error);
       })
@@ -280,6 +266,230 @@ export class DashboardComponent implements OnInit {
   //   );
   //   this.olderTimelineHistory = [...this.olderTimelineHistory, ...nextData];
   // }
+
+  fetchDocumentCounts() {
+    if (!this.user || !this.user.role) {
+      console.warn('User tidak ditemukan atau tidak memiliki role.');
+      return;
+    }
+
+    const endpoint =
+      this.user.role === 'SA'
+        ? `${environment.apiUrl2}/superadmin/timeline/documents-per-month`
+        : `${environment.apiUrl2}/admin/timeline/documents-per-month`;
+
+    axios
+      .get(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+        },
+      })
+      .then((response) => {
+        if (response.data && Array.isArray(response.data.data)) {
+          this.documentCounts = response.data.data;
+          this.updateLineChartOptions();
+        } else {
+          console.warn('Format response tidak sesuai:');
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching document counts:', error);
+      })
+      .finally(() => {
+        // Set timeout untuk auto refresh setelah fetch selesai
+        setTimeout(() => this.fetchDocumentCounts(), 180000); // 3 menit
+      });
+  }
+
+  updateLineChartOptions() {
+    if (!this.documentCounts.length) return;
+
+    // Daftar nama bulan
+    const monthNames = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    // Daftar 12 bulan lengkap dengan format YYYY-MM
+    const allMonths = Array.from({ length: 12 }, (_, i) => {
+      const month = (i + 1).toString().padStart(2, '0'); // Format "01", "02", ..., "12"
+      return `2025-${month}`; // Pastikan tahun sesuai dengan data API
+    });
+
+    // Buat map dari data API
+    const dataMap = new Map(
+      this.documentCounts.map((item) => [item.month, item.count])
+    );
+
+    // Isi data yang kosong dengan 0
+    const completeData = allMonths.map((month) => ({
+      month,
+      count: dataMap.get(month) || 0,
+    }));
+
+    // Hitung maxCount dengan default minimal 10
+    const maxCount = Math.max(...completeData.map((item) => item.count), 10);
+
+    // Buffer 20% untuk maxY
+    const maxY = Math.ceil(maxCount * 1.2);
+
+    // Format bulan dari YYYY-MM ke nama bulan
+    const formattedMonths = completeData.map((item) => {
+      const monthNumber = parseInt(item.month.split('-')[1], 10); // Ambil bagian bulan (1-12)
+      return monthNames[monthNumber - 1]; // Konversi ke nama bulan
+    });
+
+    this.lineChartOptions = {
+      title: {
+        text: 'Jumlah Dokumen Dibuat per Bulan',
+        left: 'center',
+      },
+      tooltip: { trigger: 'axis' },
+      xAxis: {
+        type: 'category',
+        data: formattedMonths, // Gunakan nama bulan yang sudah diformat
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: maxY, // Gunakan maxY yang sudah dihitung
+        interval: Math.ceil(maxY / 5),
+      },
+      series: [
+        {
+          name: 'Jumlah Dokumen',
+          type: 'line',
+          data: completeData.map((item) => item.count),
+          itemStyle: { color: '#007bff' },
+        },
+      ],
+    };
+  }
+
+  fetchDocumentStatusCounts() {
+    // Validasi user dan role
+    if (!this.user || !this.user.role) {
+      console.warn('User tidak ditemukan atau tidak memiliki role.');
+      return;
+    }
+
+    // Tentukan endpoint berdasarkan role
+    const endpoint =
+      this.user.role === 'SA'
+        ? `${environment.apiUrl2}/superadmin/timeline/documents-status`
+        : `${environment.apiUrl2}/admin/timeline/documents-status`;
+
+    axios
+      .get(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+        },
+      })
+      .then((response) => {
+
+        if (!response.data || !Array.isArray(response.data.data)) {
+          console.warn(
+            'Format response tidak sesuai atau data kosong:',
+            response.data
+          );
+          this.documentStatusCounts = []; // Reset agar chart tidak error
+          return;
+        }
+
+        this.documentStatusCounts = response.data.data;
+        this.updatePieChartOptions();
+      })
+      .catch((error) => {
+        console.error('Error fetching document status counts:', error);
+      })
+      .finally(() => {
+        // Set timeout untuk auto refresh setelah fetch selesai
+        setTimeout(() => this.fetchDocumentStatusCounts(), 180000); // 3 menit
+      });
+  }
+
+  updatePieChartOptions() {
+    if (!this.documentStatusCounts.length) {
+      this.pieChartOptions = {
+        title: {
+          text: 'Jumlah Dokumen \nBerdasarkan Status',
+          left: 'center',
+        },
+        tooltip: {
+          trigger: 'item',
+        },
+        series: [
+          {
+            name: 'Status Dokumen',
+            type: 'pie',
+            radius: '50%',
+            data: [
+              {
+                name: 'No Data',
+                value: 1, // Dummy value agar tetap terlihat
+                itemStyle: {
+                  color: '#E0E0E0', // Warna abu-abu untuk menunjukkan tidak ada data
+                },
+              },
+            ],
+            label: {
+              show: true,
+              position: 'center',
+              formatter: 'No Data',
+              fontSize: 14,
+              color: '#666',
+            },
+            emphasis: {
+              label: {
+                show: false, // Jangan tampilkan highlight
+              },
+            },
+          },
+        ],
+      };
+      return;
+    }
+  
+    // Jika ada data, tampilkan pie chart normal
+    this.pieChartOptions = {
+      title: {
+        text: 'Jumlah Dokumen \nBerdasarkan Status',
+        left: 'center',
+      },
+      tooltip: {
+        trigger: 'item',
+      },
+      series: [
+        {
+          name: 'Status Dokumen',
+          type: 'pie',
+          radius: '50%',
+          data: this.documentStatusCounts.map((item) => ({
+            name: item.status,
+            value: item.count,
+          })),
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)',
+            },
+          },
+        },
+      ],
+    };
+  }
+  
 
   fetchDataFormDA(): void {
     axios
