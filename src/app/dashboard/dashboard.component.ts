@@ -43,8 +43,12 @@ export class DashboardComponent implements OnInit {
   // chartOptions: EChartsOption = {};
   lineChartOptions: any;
   pieChartOptions: any;
+  barChartOptions: any;
   documentCounts: { month: string; count: number }[] = [];
   documentStatusCounts: { status: string; count: number }[] = [];
+  documentNameCounts: { month: string; document_name: string; count: number }[] = [];
+
+  // documentNameCounts: any[] = [];
 
   // user
   dataDALength: any;
@@ -120,6 +124,7 @@ export class DashboardComponent implements OnInit {
             this.fetchOlderTimeline();
             this.fetchDocumentCounts();
             this.fetchDocumentStatusCounts();
+            this.fetchDocumentNameCounts();
           } else {
             console.warn(
               'Role bukan SA atau A, fetchTimelineHistory tidak dijalankan.'
@@ -174,6 +179,8 @@ export class DashboardComponent implements OnInit {
       ? `${environment.apiUrl2}/superadmin/timeline/older`
       : `${environment.apiUrl2}/admin/timeline/older`;
 
+      console.log(`Fetching older timeline from: ${endpoint}`);
+
     axios
       .get(endpoint, {
         headers: {
@@ -185,6 +192,7 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
+        console.log('Older timeline response:', response.data);
         if (response.data.message === 'no other data') {
           this.hasMoreData = false;
           this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat';
@@ -203,7 +211,7 @@ export class DashboardComponent implements OnInit {
           newData = response.data.data.result;
         }
 
-        if (newData.length > 0) {
+        if (Array.isArray(newData)) {
           if (isSuperAdmin) {
             this.superadminOlderTimelineHistory = [
               ...this.superadminOlderTimelineHistory,
@@ -216,7 +224,11 @@ export class DashboardComponent implements OnInit {
             ];
           }
 
-          isSuperAdmin ? this.superadminOlderTimelineHistory.length : this.adminOlderTimelineHistory.length += 3;
+          // if (isSuperAdmin) {
+          //   this.superadminOlderTimelineHistory.length += 3;
+          // } else {
+          //   this.adminOlderTimelineHistory.length += 3;
+          // }          
 
           if (newData.length < 3) {
             this.hasMoreData = false;
@@ -230,11 +242,15 @@ export class DashboardComponent implements OnInit {
       })
       .catch((error) => {
         console.error('Error fetching timeline history:', error);
+      })
+      .finally(() => {
+        // Set timeout untuk auto refresh setelah fetch selesai
+        setTimeout(() => this.fetchDocumentCounts(), 180000); // 3 menit
       });
   }
 
   getOlderTimelineHistory(): any[] {
-    return this.role_code === 'SA' ? this.superadminOlderTimelineHistory : this.olderTimelineHistory;
+    return this.role_code === 'SA' ? this.superadminOlderTimelineHistory : this.adminOlderTimelineHistory;
   }  
 
   loadMore() {
@@ -351,7 +367,7 @@ export class DashboardComponent implements OnInit {
 
     this.lineChartOptions = {
       title: {
-        text: 'Jumlah Dokumen Dibuat per Bulan',
+        text: 'Jumlah Keseluruhan Dokumen \nper Bulan',
         left: 'center',
       },
       tooltip: { trigger: 'axis' },
@@ -490,6 +506,137 @@ export class DashboardComponent implements OnInit {
     };
   }
   
+  fetchDocumentNameCounts() {
+      // Validasi user dan role
+      if (!this.user || !this.user.role) {
+        console.warn('User tidak ditemukan atau tidak memiliki role.');
+        return;
+      }
+  
+      // Tentukan endpoint berdasarkan role
+      const endpoint =
+        this.user.role === 'SA'
+          ? `${environment.apiUrl2}/superadmin/timeline/forms/count-per-document`
+          : `${environment.apiUrl2}/admin/timeline/forms/count-per-document`;
+  
+      axios
+        .get(endpoint, {
+          headers: {
+            Authorization: `Bearer ${this.cookieService.get('userToken')}`,
+          },
+        })
+        .then((response) => {
+  
+          if (!response.data || !Array.isArray(response.data.data)) {
+            console.log('Data:', response.data);
+            console.warn(
+              'Format response tidak sesuai atau data kosong:',
+              response.data
+            );
+            this.documentNameCounts = []; // Reset agar chart tidak error
+            return;
+          }
+  
+          this.documentNameCounts = response.data.data;
+          this.updateBarChartOptions();
+        })
+        .catch((error) => {
+          console.error('Error fetching document status counts:', error);
+        })
+        .finally(() => {
+          // Set timeout untuk auto refresh setelah fetch selesai
+          setTimeout(() => this.fetchDocumentNameCounts(), 180000); // 3 menit
+        });
+    }
+
+    updateBarChartOptions() {
+      if (!this.documentNameCounts.length) return;
+    
+      // Ambil bulan dari data pertama (default "N/A" jika kosong)
+      const monthNumber = this.documentNameCounts[0]?.month || "N/A";
+    
+      // Format bulan dari angka menjadi nama bulan
+      const monthNames: { [key: string]: string } = {
+        "1": "Januari",
+        "2": "Februari",
+        "3": "Maret",
+        "4": "April",
+        "5": "Mei",
+        "6": "Juni",
+        "7": "Juli",
+        "8": "Agustus",
+        "9": "September",
+        "10": "Oktober",
+        "11": "November",
+        "12": "Desember",
+      };
+    
+      const formattedMonth = monthNames[monthNumber] || "Bulan Tidak Diketahui";
+    
+      // Daftar nama dokumen yang harus selalu ada di chart
+      const allDocuments: { [key: string]: string } = {
+        "IT Change Management": "ITCM",
+        "Berita Acara IT Change Management": "BA ITCM",
+        "Dampak Analisa": "DA",
+        "Hak Akses": "HA",
+      };
+    
+      // Mapping data API ke format yang diinginkan
+      const documentMap = new Map<string, number>();
+    
+      // Inisialisasi semua kategori dengan count = 0
+      Object.values(allDocuments).forEach((abbr) => documentMap.set(abbr, 0));
+    
+      // Isi data yang ada dari API
+      this.documentNameCounts.forEach((item) => {
+        const abbr = allDocuments[item.document_name] || item.document_name;
+        documentMap.set(abbr, item.count);
+      });
+    
+      // Ubah ke array untuk chart
+      const categories = Array.from(documentMap.keys());
+      const counts = Array.from(documentMap.values());
+    
+      // Hitung maxCount dengan minimal 5 agar tetap ada skala yang bagus
+      const maxCount = Math.max(...counts, 5);
+    
+      // Buffer 20% untuk maxY
+      const maxY = Math.ceil(maxCount * 1.2);
+    
+      this.barChartOptions = {
+        title: {
+          text: `Jumlah Dokumen Bulan ${formattedMonth}`, // Pakai nama bulan yang sudah diformat
+          left: 'center',
+        },
+        tooltip: {
+          trigger: 'axis',
+        },
+        xAxis: {
+          type: 'category',
+          data: categories,
+          axisLabel: {
+            rotate: 25,
+            interval: 0,
+          },
+        },
+        yAxis: {
+          type: 'value',
+          min: 0,
+          max: maxY, // Gunakan maxY yang sudah dihitung
+          interval: Math.ceil(maxY / 5),
+        },
+        series: [
+          {
+            name: 'Jumlah Dokumen',
+            type: 'bar',
+            data: counts,
+            itemStyle: {
+              color: '#007bff',
+            },
+          },
+        ],
+      };
+    }    
 
   fetchDataFormDA(): void {
     axios
