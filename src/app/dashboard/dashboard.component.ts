@@ -78,7 +78,6 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.fetchProfileData();
-    console.log('Role Code di ngOnInit:', this.role_code);
     // Auto refresh setiap 3 menit
     setInterval(() => {
       if (this.role_code === 'SA' || this.role_code === 'A') {
@@ -114,13 +113,10 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
-        console.log('Profile data:', response.data);
 
         if (response.data && response.data.role_code) {
           this.user = { role: response.data.role_code }; // Gunakan role_code
           this.role_code = response.data.role_code; // Tambahkan ini
-          console.log('User:', this.user);
-          console.log('User role:', this.user.role);
 
           // Cek role sebelum fetch timeline
           if (this.user.role === 'SA' || this.user.role === 'A') {
@@ -183,8 +179,6 @@ export class DashboardComponent implements OnInit {
       ? `${environment.apiUrl2}/superadmin/timeline/older`
       : `${environment.apiUrl2}/admin/timeline/older`;
 
-    console.log(`Fetching older timeline from: ${endpoint}`);
-
     axios
       .get(endpoint, {
         headers: {
@@ -198,7 +192,6 @@ export class DashboardComponent implements OnInit {
         },
       })
       .then((response) => {
-        console.log('Older timeline response:', response.data);
         if (response.data.message === 'no other data') {
           this.hasMoreData = false;
           this.noMoreDataMessage = 'Tidak ada data lagi yang dapat dimuat';
@@ -269,7 +262,6 @@ export class DashboardComponent implements OnInit {
 
   refreshTimeline() {
     this.isLoading = true;
-    console.log('Loading state:', this.isLoading); // Log state loading
 
     Promise.all([this.fetchRecentTimeline(), this.fetchOlderTimeline()])
       .then(() => {})
@@ -278,7 +270,6 @@ export class DashboardComponent implements OnInit {
       })
       .finally(() => {
         this.isLoading = false;
-        console.log('Loading finished, state:', this.isLoading); // Log ketika loading selesai
       });
   }
 
@@ -293,7 +284,6 @@ export class DashboardComponent implements OnInit {
 
   fetchDocumentCounts() {
     if (!this.user || !this.user.role) {
-      console.warn('User tidak ditemukan atau tidak memiliki role.');
       return;
     }
 
@@ -326,75 +316,72 @@ export class DashboardComponent implements OnInit {
   }
 
   updateLineChartOptions() {
-    if (!this.documentCounts.length) return;
-
+    if (!this.documentCounts.length) {
+      // Tampilkan pesan jika data kosong
+      this.lineChartOptions = {
+        title: {
+          text: 'Form Generation Report',
+          subtext: 'No data available',
+          left: 'center',
+        },
+      };
+      return;
+    }
+  
     // Daftar nama bulan
     const monthNames = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
-
+  
+    // Ambil tahun dari data pertama atau gunakan tahun saat ini
+    const year = this.documentCounts.length > 0 
+      ? this.documentCounts[0].month.split('-')[0] 
+      : new Date().getFullYear().toString();
+  
     // Daftar 12 bulan lengkap dengan format YYYY-MM
     const allMonths = Array.from({ length: 12 }, (_, i) => {
       const month = (i + 1).toString().padStart(2, '0'); // Format "01", "02", ..., "12"
-      return `2025-${month}`; // Pastikan tahun sesuai dengan data API
+      return `${year}-${month}`;
     });
-
+  
     // Buat map dari data API
     const dataMap = new Map(
       this.documentCounts.map((item) => [item.month, item.count])
     );
-
+  
     // Isi data yang kosong dengan 0
     const completeData = allMonths.map((month) => ({
       month,
       count: dataMap.get(month) || 0,
     }));
-
+  
     // Hitung total dokumen
     const totalDocuments = completeData.reduce(
       (sum, item) => sum + item.count,
       0
     );
-
+  
     // Hitung maxCount dengan default minimal 10
     const maxCount = Math.max(...completeData.map((item) => item.count), 10);
-
+  
     // Buffer 20% untuk maxY
     const maxY = Math.ceil(maxCount * 1.2);
-
+  
     // Format bulan dari YYYY-MM ke nama bulan
     const formattedMonths = completeData.map((item) => {
       const monthNumber = parseInt(item.month.split('-')[1], 10); // Ambil bagian bulan (1-12)
       return monthNames[monthNumber - 1]; // Konversi ke nama bulan
     });
-
+  
     this.lineChartOptions = {
       title: {
-        text: 'Document Generation Report',
-        subtext: `Total: ${totalDocuments} Documents`,
+        text: 'Form Generation Report',
+        subtext: `Total: ${totalDocuments} Forms`,
         left: 'center',
       },
       tooltip: {
         trigger: 'axis',
-        // formatter: (params: any) => {
-        //   let tooltipText = `${params[0].axisValue}<br/>`;
-        //   params.forEach((param: any) => {
-        //     tooltipText += `${param.marker} ${param.seriesName}: ${param.value}<br/>`;
-        //   });
-        //   tooltipText += `<b>Total: ${totalDocuments} Document</b>`; // Tambahkan total di tooltip
-        //   return tooltipText;
-        // },
       },
       xAxis: {
         type: 'category',
@@ -408,7 +395,7 @@ export class DashboardComponent implements OnInit {
       },
       series: [
         {
-          name: 'Number of Documents :',
+          name: 'Number of Forms :',
           type: 'line',
           data: completeData.map((item) => item.count),
           itemStyle: { color: '#007bff' },
@@ -463,7 +450,7 @@ export class DashboardComponent implements OnInit {
        {
       this.pieChartOptions = {
         title: {
-          text: 'Monthly Document Status Overview',
+          text: 'Monthly Form Status Overview',
           left: 'center',
         },
         tooltip: {
@@ -471,7 +458,7 @@ export class DashboardComponent implements OnInit {
         },
         series: [
           {
-            name: 'Document Status',
+            name: 'Form Status',
             type: 'pie',
             radius: '50%',
             data: [
@@ -504,7 +491,7 @@ export class DashboardComponent implements OnInit {
     // Jika ada data, tampilkan pie chart normal
     this.pieChartOptions = {
       title: {
-        text: 'Monthly Document Status Overview',
+        text: 'Monthly Form Status Overview',
         left: 'center',
       },
       tooltip: {
@@ -512,7 +499,7 @@ export class DashboardComponent implements OnInit {
       },
       series: [
         {
-          name: 'Document Status',
+          name: 'Form Status',
           type: 'pie',
           radius: '50%',
           data: this.documentStatusCounts.map((item) => ({
@@ -573,7 +560,25 @@ export class DashboardComponent implements OnInit {
   }
 
   updateBarChartOptions() {
-    if (!this.documentNameCounts.length) return;
+    if (!this.documentNameCounts.length) {
+      this.barChartOptions = {
+        title: {
+          text: 'Monthly Form Statistics',
+          left: 'center',
+        },
+        graphic: {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: 'No Data',
+            fontSize: 16,
+            fill: '#666',
+          },
+        },
+      };
+      return;
+    }
 
     // Ambil bulan dari data pertama (default "N/A" jika kosong)
     const monthNumber = this.documentNameCounts[0]?.month || 'N/A';
@@ -634,7 +639,7 @@ export class DashboardComponent implements OnInit {
 
     this.barChartOptions = {
       title: {
-        text: `Monthly Document Statistics`, // Pakai nama bulan yang sudah diformat
+        text: `Monthly Form Statistics`, // Pakai nama bulan yang sudah diformat
         subtext: `Month: ${formattedMonth} | Total: ${totalDocuments} Documents`,
         left: 'center',
       },
@@ -657,7 +662,7 @@ export class DashboardComponent implements OnInit {
       },
       series: [
         {
-          name: 'Number of Documents :',
+          name: 'Number of Forms :',
           type: 'bar',
           data: counts,
           itemStyle: {
@@ -678,17 +683,15 @@ export class DashboardComponent implements OnInit {
       .then((response) => {
         if (response.data) {
           this.dataListAllFormDA = response.data;
-          console.log(response.data);
           this.dataDALength = this.dataListAllFormDA.length;
         } else {
-          console.log('Data is null');
           this.dataDALength = 0;
         }
       })
       .catch((error) => {
         if (error.response) {
           if (error.response.status === 500) {
-            console.log(error.response.data.message);
+            console.error(error.response.data.message);
           }
         } else {
           console.error(error);
@@ -706,19 +709,17 @@ export class DashboardComponent implements OnInit {
       .then((response) => {
         if (response.data) {
           this.dataListFormITCM = response.data;
-          console.log(response.data);
           this.dataITCMLength = this.dataListFormITCM.length;
         } else {
-          console.log('Data is null');
           this.dataITCMLength = 0;
         }
       })
       .catch((error) => {
         if (error.response) {
           if (error.response.status === 500) {
-            console.log(error.response.data.message);
+            console.error(error.response.data.message);
           } else if (error.response.status === 404) {
-            console.log(error.response.data.message);
+            console.error(error.response.data.message);
           }
         } else {
           console.error(error);
@@ -736,17 +737,16 @@ export class DashboardComponent implements OnInit {
       .then((response) => {
         if (response.data) {
           this.dataListAllBA = response.data;
-          console.log(response.data);
+
           this.dataBALength = this.dataListAllBA.length;
         } else {
-          console.log('Data is null');
           this.dataBALength = 0;
         }
       })
       .catch((error) => {
         if (error.response) {
           if (error.response.status === 500) {
-            console.log(error.response.data.message);
+            console.error(error.response.data.message);
           }
         } else {
           console.error(error);
@@ -764,19 +764,16 @@ export class DashboardComponent implements OnInit {
       .then((response) => {
         if (response.data) {
           this.dataListAllHA = response.data;
-          console.log('respoon ha', response);
 
-          console.log(response.data);
           this.dataHALength = this.dataListAllHA.length;
         } else {
-          console.log('Data is null');
           this.dataHALength = 0;
         }
       })
       .catch((error) => {
         if (error.response) {
           if (error.response.status === 500) {
-            console.log(error.response.data.message);
+            console.error(error.response.data.message);
           }
         } else {
           console.error(error);
@@ -798,12 +795,11 @@ export class DashboardComponent implements OnInit {
           );
           this.dataSignatureITCMLength = this.dataListSignatureITCM.length;
         } else {
-          console.log('Data ITCM is null');
           this.dataSignatureITCMLength = 0;
         }
       })
       .catch((error) => {
-        console.log('Error fetching ITCM signatures:', error);
+        console.error(error);
         this.dataSignatureITCMLength = 0;
       });
   }
@@ -822,12 +818,11 @@ export class DashboardComponent implements OnInit {
           );
           this.dataSignatureDALength = this.dataListSignatureDA.length;
         } else {
-          console.log('Data DA is null');
           this.dataSignatureDALength = 0;
         }
       })
       .catch((error) => {
-        console.log('Error fetching DA signatures:', error);
+        console.error(error);
         this.dataSignatureDALength = 0;
       });
   }
@@ -846,12 +841,11 @@ export class DashboardComponent implements OnInit {
           );
           this.dataSignatureBALength = this.dataListSignatureBA.length;
         } else {
-          console.log('Data BA is null');
           this.dataSignatureBALength = 0;
         }
       })
       .catch((error) => {
-        console.log('Error fetching BA signatures:', error);
+        console.error(error);
         this.dataSignatureBALength = 0;
       });
   }
@@ -870,12 +864,11 @@ export class DashboardComponent implements OnInit {
           );
           this.dataSignatureHALength = this.dataListSignatureHA.length;
         } else {
-          console.log('Data HA is null');
           this.dataSignatureHALength = 0;
         }
       })
       .catch((error) => {
-        console.log('Error fetching HA signatures:', error);
+        console.error(error);
         this.dataSignatureHALength = 0;
       });
   }
